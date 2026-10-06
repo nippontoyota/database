@@ -1,0 +1,10 @@
+node_modules
+.next
+.env
+.env.local
+.vercel
+next-env.d.ts
+*.tsbuildinfo
+
+# The dataset contains owner names and mobile numbers. Never commit it.
+data/
