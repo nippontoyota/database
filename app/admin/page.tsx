@@ -35,7 +35,7 @@ export default async function AdminPage() {
 
       <main className="page">
         <h1>Admin</h1>
-        <p className="lead">Manage who can sign in to the portal.</p>
+        <p className="lead">Manage who can sign in to the Portal.</p>
 
         <CreateUserForm />
       </main>
