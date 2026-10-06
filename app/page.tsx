@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { isAdminEmail } from "@/lib/supabase/admin";
 import Portal from "@/components/Portal";
 
 export const dynamic = "force-dynamic";
@@ -12,5 +13,5 @@ export default async function HomePage() {
 
   if (!user) redirect("/login");
 
-  return <Portal email={user.email ?? ""} />;
+  return <Portal email={user.email ?? ""} isAdmin={isAdminEmail(user.email)} />;
 }

@@ -210,6 +210,30 @@ button, input { font: inherit; color: inherit; }
   font-size: 14px;
   margin: 14px 0 0;
 }
+.success {
+  background: #e7f6ec;
+  color: #1a7f37;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 14px;
+  margin: 14px 0 0;
+}
+@media (prefers-color-scheme: dark) {
+  .success { background: #122c1c; color: #5fd37f; }
+}
+
+/* ---------- Admin ---------- */
+.admin-form { max-width: 420px; padding: 24px; }
+.admin-form h2 { font-size: 17px; margin: 0 0 4px; letter-spacing: -0.01em; }
+.admin-form label { display: block; font-weight: 600; font-size: 14px; margin: 14px 0 6px; }
+.admin-form input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface);
+}
+.admin-form .btn { margin-top: 18px; }
 
 /* ---------- Login ---------- */
 .login-wrap { min-height: 100vh; display: grid; place-items: center; padding: 20px; }

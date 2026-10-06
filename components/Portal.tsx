@@ -10,7 +10,7 @@ type OptionsPayload = {
   rtos: { code: string; district: string | null }[];
 };
 
-export default function Portal({ email }: { email: string }) {
+export default function Portal({ email, isAdmin }: { email: string; isAdmin: boolean }) {
   const [options, setOptions] = useState<OptionsPayload | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -131,6 +131,11 @@ export default function Portal({ email }: { email: string }) {
           <span className="brand">Registration Data Portal</span>
           <div className="who">
             <span>{email}</span>
+            {isAdmin && (
+              <a className="link-btn" href="/admin">
+                Admin
+              </a>
+            )}
             <form action="/auth/signout" method="post">
               <button className="link-btn" type="submit">
                 Sign out
