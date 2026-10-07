@@ -16,20 +16,17 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => ({}));
   const email = typeof body.email === "string" ? body.email.trim() : "";
-  const password = typeof body.password === "string" ? body.password : "";
+  const name = typeof body.name === "string" ? body.name.trim() : "";
 
-  if (!email || !password || password.length < 6) {
-    return NextResponse.json(
-      { error: "Email and a password of at least 6 characters are required." },
-      { status: 400 }
-    );
+  if (!email || !name) {
+    return NextResponse.json({ error: "Name and email are required." }, { status: 400 });
   }
 
   const admin = createAdminClient();
-  const { data, error } = await admin.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
+  const origin = new URL(request.url).origin;
+  const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
+    data: { full_name: name },
+    redirectTo: `${origin}/set-password`,
   });
 
   if (error) {

@@ -231,6 +231,24 @@ button, input { font: inherit; color: inherit; }
 }
 @media (max-width: 760px) { .admin-grid { grid-template-columns: 1fr; } }
 
+/* ---------- MFA ---------- */
+.mfa-card { max-width: 420px; }
+.mfa-qr { display: flex; justify-content: center; margin: 18px 0; }
+.mfa-qr img { width: 200px; height: 200px; background: #fff; border-radius: 6px; padding: 8px; }
+.mfa-card code {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 13px;
+  word-break: break-all;
+}
+.mfa-card input#mfa-code {
+  letter-spacing: 0.3em;
+  font-size: 20px;
+  text-align: center;
+}
+
 .admin-form { padding: 24px; }
 .admin-form h2 { font-size: 17px; margin: 0 0 4px; letter-spacing: -0.01em; }
 .admin-form label { display: block; font-weight: 600; font-size: 14px; margin: 14px 0 6px; }

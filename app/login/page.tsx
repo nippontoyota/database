@@ -24,7 +24,10 @@ export default function LoginPage() {
       setBusy(false);
       return;
     }
-    router.push("/");
+
+    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    const needsChallenge = aal && aal.nextLevel === "aal2" && aal.currentLevel !== aal.nextLevel;
+    router.push(needsChallenge ? "/mfa/verify" : "/");
     router.refresh();
   }
 
