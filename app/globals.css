@@ -223,7 +223,15 @@ button, input { font: inherit; color: inherit; }
 }
 
 /* ---------- Admin ---------- */
-.admin-form { max-width: 420px; padding: 24px; }
+.admin-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
+@media (max-width: 760px) { .admin-grid { grid-template-columns: 1fr; } }
+
+.admin-form { padding: 24px; }
 .admin-form h2 { font-size: 17px; margin: 0 0 4px; letter-spacing: -0.01em; }
 .admin-form label { display: block; font-weight: 600; font-size: 14px; margin: 14px 0 6px; }
 .admin-form input {
@@ -234,6 +242,7 @@ button, input { font: inherit; color: inherit; }
   background: var(--surface);
 }
 .admin-form .btn { margin-top: 18px; }
+.admin-form .success ul { margin: 8px 0 0; padding-left: 18px; }
 
 /* ---------- Login ---------- */
 .login-wrap { min-height: 100vh; display: grid; place-items: center; padding: 20px; }

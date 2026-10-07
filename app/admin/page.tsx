@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isAdminEmail } from "@/lib/supabase/admin";
 import CreateUserForm from "@/components/CreateUserForm";
+import UploadDataForm from "@/components/UploadDataForm";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +38,10 @@ export default async function AdminPage() {
         <h1>Admin</h1>
         <p className="lead">Manage who can sign in to the Portal.</p>
 
-        <CreateUserForm />
+        <div className="admin-grid">
+          <CreateUserForm />
+          <UploadDataForm />
+        </div>
       </main>
     </>
   );
