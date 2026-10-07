@@ -1,0 +1,3 @@
+registration_no,registration_date,reg_year,owner_name,owner_mobile,maker,model,rto_code,district,pincode,address
+KL0710001,2022-06-14,2022,Sample Owner,9000000001,Maruti Suzuki,Swift,KL07,Ernakulam,682001,"1, Sample Street, Ernakulam (dummy)"
+GJ0110002,2023-01-09,2023,Sample Owner Two,9000000002,Hyundai,Creta,GJ01,Ahmedabad,380001,"2, Sample Street, Ahmedabad (dummy)"

@@ -42,6 +42,10 @@ export default function UploadDataForm() {
         maker, model, rto_code, district, pincode, address.
       </p>
 
+      <a className="link-btn" href="/sample-vehicles.csv" download>
+        Download sample CSV
+      </a>
+
       <label htmlFor="data-file">CSV file</label>
       <input
         id="data-file"
