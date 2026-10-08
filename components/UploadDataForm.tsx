@@ -2,7 +2,62 @@
 
 import { useState } from "react";
 
-type Result = { totalRows: number; inserted: number; errors: string[] };
+type RowIssue = { row: number; registration_no: string; reason: string };
+type Result = {
+  totalRows: number;
+  inserted: number;
+  skippedCount: number;
+  failedCount: number;
+  skipped: RowIssue[];
+  failed: RowIssue[];
+  truncated: boolean;
+};
+
+function groupByReason(rows: RowIssue[]) {
+  const counts = new Map<string, number>();
+  for (const r of rows) counts.set(r.reason, (counts.get(r.reason) ?? 0) + 1);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+}
+
+function IssueList({ title, rows }: { title: string; rows: RowIssue[] }) {
+  if (rows.length === 0) return null;
+  const byReason = groupByReason(rows);
+
+  return (
+    <details className="issue-list">
+      <summary>
+        {title} ({rows.length.toLocaleString("en-IN")})
+      </summary>
+      <ul className="issue-reasons">
+        {byReason.map(([reason, count]) => (
+          <li key={reason}>
+            {count.toLocaleString("en-IN")} × {reason}
+          </li>
+        ))}
+      </ul>
+      <div className="issue-table-wrap">
+        <table className="issue-table">
+          <thead>
+            <tr>
+              <th>Row</th>
+              <th>Registration No</th>
+              <th>Reason</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.row}>
+                <td>{r.row}</td>
+                <td>{r.registration_no}</td>
+                <td>{r.reason}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  );
+}
 
 export default function UploadDataForm() {
   const [file, setFile] = useState<File | null>(null);
@@ -64,16 +119,21 @@ export default function UploadDataForm() {
           {error}
         </div>
       )}
+
       {result && (
         <div className="success">
-          Inserted {result.inserted.toLocaleString("en-IN")} of{" "}
-          {result.totalRows.toLocaleString("en-IN")} rows.
-          {result.errors.length > 0 && (
-            <ul>
-              {result.errors.map((e, i) => (
-                <li key={i}>{e}</li>
-              ))}
-            </ul>
+          <p>
+            Inserted {result.inserted.toLocaleString("en-IN")} of{" "}
+            {result.totalRows.toLocaleString("en-IN")} rows.
+            {result.skippedCount > 0 && ` Skipped ${result.skippedCount.toLocaleString("en-IN")}.`}
+            {result.failedCount > 0 && ` Failed ${result.failedCount.toLocaleString("en-IN")}.`}
+          </p>
+
+          <IssueList title="Skipped — missing required values, never attempted" rows={result.skipped} />
+          <IssueList title="Failed — rejected by the database" rows={result.failed} />
+
+          {result.truncated && (
+            <p className="hint">Showing the first 200 of each — fix these and re-upload the rest.</p>
           )}
         </div>
       )}

@@ -21,6 +21,9 @@ const REQUIRED_COLUMNS = [
 ] as const;
 
 const BATCH_SIZE = 500;
+const MAX_DETAILS = 200; // cap how many skipped/failed rows we report individually
+
+type Row = { row: number; registration_no: string; reason: string };
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -54,57 +57,105 @@ export async function POST(request: Request) {
   }
 
   const colIndex = Object.fromEntries(REQUIRED_COLUMNS.map((c) => [c, header.indexOf(c)]));
-  const dataRows = rows.slice(1).filter((r) => r.some((cell) => cell.trim() !== ""));
+  const dataRows = rows.slice(1);
 
-  const records = dataRows.map((r) => {
+  // --- Validate every row up front; rows missing a required value never get an insert attempt. ---
+  const skipped: Row[] = [];
+  const toInsert: { rowNum: number; record: Record<string, unknown> }[] = [];
+
+  dataRows.forEach((r, i) => {
+    const rowNum = i + 2; // +1 for 0-index, +1 for the header row
     const get = (key: (typeof REQUIRED_COLUMNS)[number]) => r[colIndex[key]]?.trim() ?? "";
-    return {
-      registration_no: get("registration_no"),
-      registration_date: get("registration_date"),
-      reg_year: Number(get("reg_year")),
-      owner_name: get("owner_name") || null,
-      owner_mobile: get("owner_mobile") || null,
-      maker: get("maker"),
-      model: get("model") || null,
-      rto_code: get("rto_code"),
-      district: get("district") || null,
-      pincode: get("pincode") || null,
-      address: get("address") || null,
-    };
+
+    if (r.every((cell) => cell.trim() === "")) {
+      return; // fully blank line — not counted as skipped, just ignored
+    }
+
+    const registration_no = get("registration_no");
+    const registration_date = get("registration_date");
+    const reg_year = get("reg_year");
+    const maker = get("maker");
+    const rto_code = get("rto_code");
+
+    const missingFields: string[] = [];
+    if (!registration_no) missingFields.push("registration_no");
+    if (!registration_date) missingFields.push("registration_date");
+    if (!Number.isInteger(Number(reg_year)) || reg_year === "") missingFields.push("reg_year");
+    if (!maker) missingFields.push("maker");
+    if (!rto_code) missingFields.push("rto_code");
+
+    if (missingFields.length) {
+      skipped.push({
+        row: rowNum,
+        registration_no: registration_no || "(blank)",
+        reason: `Missing ${missingFields.join(", ")}`,
+      });
+      return;
+    }
+
+    toInsert.push({
+      rowNum,
+      record: {
+        registration_no,
+        registration_date,
+        reg_year: Number(reg_year),
+        owner_name: get("owner_name") || null,
+        owner_mobile: get("owner_mobile") || null,
+        maker,
+        model: get("model") || null,
+        rto_code,
+        district: get("district") || null,
+        pincode: get("pincode") || null,
+        address: get("address") || null,
+      },
+    });
   });
 
-  const invalid = records.filter(
-    (r) => !r.registration_no || !r.registration_date || !r.maker || !r.rto_code || !Number.isInteger(r.reg_year)
-  );
-  if (invalid.length) {
-    return NextResponse.json(
-      {
-        error: `${invalid.length} row(s) are missing a required value (registration_no, registration_date, reg_year, maker, rto_code).`,
-      },
-      { status: 400 }
-    );
-  }
-
+  // --- Insert in batches; on a batch failure, retry row-by-row to pin down which rows failed and why. ---
   const admin = createAdminClient();
   let inserted = 0;
-  const errors: string[] = [];
+  const failed: Row[] = [];
 
-  for (let i = 0; i < records.length; i += BATCH_SIZE) {
-    const batch = records.slice(i, i + BATCH_SIZE);
+  function reasonFor(error: { code?: string; message: string }): string {
+    if (error.code === "23505") return "Duplicate registration_no (already in the database or repeated in this file)";
+    if (error.code === "22007" || error.code === "22008") return "Invalid date in registration_date";
+    if (error.code === "22P02") return "Invalid value for a numeric field (reg_year)";
+    return error.message;
+  }
+
+  for (let i = 0; i < toInsert.length; i += BATCH_SIZE) {
+    const batch = toInsert.slice(i, i + BATCH_SIZE);
     const { error, count } = await admin
       .from("vehicles")
-      .insert(batch, { count: "exact" });
+      .insert(batch.map((b) => b.record), { count: "exact" });
 
-    if (error) {
-      errors.push(`Rows ${i + 1}-${i + batch.length}: ${error.message}`);
-    } else {
+    if (!error) {
       inserted += count ?? batch.length;
+      continue;
+    }
+
+    // Something in this batch failed — fall back to one-by-one so we can report the exact row(s).
+    for (const b of batch) {
+      const { error: rowError } = await admin.from("vehicles").insert(b.record);
+      if (rowError) {
+        failed.push({
+          row: b.rowNum,
+          registration_no: String(b.record.registration_no),
+          reason: reasonFor(rowError),
+        });
+      } else {
+        inserted += 1;
+      }
     }
   }
 
   return NextResponse.json({
-    totalRows: records.length,
+    totalRows: dataRows.length,
     inserted,
-    errors,
+    skippedCount: skipped.length,
+    failedCount: failed.length,
+    skipped: skipped.slice(0, MAX_DETAILS),
+    failed: failed.slice(0, MAX_DETAILS),
+    truncated: skipped.length > MAX_DETAILS || failed.length > MAX_DETAILS,
   });
 }
