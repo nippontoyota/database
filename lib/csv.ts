@@ -46,3 +46,11 @@ export function parseCsv(text: string): string[][] {
 
   return rows.filter((r) => !(r.length === 1 && r[0] === ""));
 }
+
+function csvCell(value: string): string {
+  return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
+export function stringifyCsv(rows: string[][]): string {
+  return rows.map((r) => r.map(csvCell).join(",")).join("\r\n") + "\r\n";
+}

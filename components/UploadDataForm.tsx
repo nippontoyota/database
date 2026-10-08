@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { parseCsv, stringifyCsv } from "@/lib/csv";
 
 type RowIssue = { row: number; registration_no: string; reason: string };
 type Result = {
@@ -10,8 +11,36 @@ type Result = {
   failedCount: number;
   skipped: RowIssue[];
   failed: RowIssue[];
-  truncated: boolean;
 };
+
+// Vercel's serverless functions reject request bodies past a platform-level size
+// limit (a few MB) that no app config can raise. Large files are split into
+// chunks under that limit and uploaded as separate sequential requests instead.
+const CHUNK_CHAR_LIMIT = 3_000_000;
+const MAX_DISPLAYED = 200;
+
+function rowSize(row: string[]): number {
+  return row.reduce((sum, cell) => sum + cell.length + 1, 0);
+}
+
+function buildChunks(header: string[], dataRows: string[][]): string[][][] {
+  const chunks: string[][][] = [];
+  let current: string[][] = [];
+  let size = rowSize(header);
+
+  for (const row of dataRows) {
+    const size1 = rowSize(row);
+    if (current.length > 0 && size + size1 > CHUNK_CHAR_LIMIT) {
+      chunks.push(current);
+      current = [];
+      size = rowSize(header);
+    }
+    current.push(row);
+    size += size1;
+  }
+  if (current.length > 0) chunks.push(current);
+  return chunks;
+}
 
 function groupByReason(rows: RowIssue[]) {
   const counts = new Map<string, number>();
@@ -19,19 +48,19 @@ function groupByReason(rows: RowIssue[]) {
   return [...counts.entries()].sort((a, b) => b[1] - a[1]);
 }
 
-function IssueList({ title, rows }: { title: string; rows: RowIssue[] }) {
-  if (rows.length === 0) return null;
+function IssueList({ title, count, rows }: { title: string; count: number; rows: RowIssue[] }) {
+  if (count === 0) return null;
   const byReason = groupByReason(rows);
 
   return (
     <details className="issue-list">
       <summary>
-        {title} ({rows.length.toLocaleString("en-IN")})
+        {title} ({count.toLocaleString("en-IN")})
       </summary>
       <ul className="issue-reasons">
-        {byReason.map(([reason, count]) => (
+        {byReason.map(([reason, c]) => (
           <li key={reason}>
-            {count.toLocaleString("en-IN")} × {reason}
+            {c.toLocaleString("en-IN")} × {reason}
           </li>
         ))}
       </ul>
@@ -55,6 +84,9 @@ function IssueList({ title, rows }: { title: string; rows: RowIssue[] }) {
           </tbody>
         </table>
       </div>
+      {count > rows.length && (
+        <p className="hint">Showing the first {rows.length.toLocaleString("en-IN")} of {count.toLocaleString("en-IN")}.</p>
+      )}
     </details>
   );
 }
@@ -62,6 +94,7 @@ function IssueList({ title, rows }: { title: string; rows: RowIssue[] }) {
 export default function UploadDataForm() {
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Result | null>(null);
 
@@ -72,21 +105,63 @@ export default function UploadDataForm() {
     setError(null);
     setResult(null);
 
-    const form = new FormData();
-    form.append("file", file);
-
-    const res = await fetch("/api/admin/upload", { method: "POST", body: form });
-    const body = await res.json().catch(() => null);
-
-    if (!res.ok) {
-      setError(body?.error ?? "Upload failed.");
+    const text = await file.text();
+    const rows = parseCsv(text);
+    if (rows.length < 2) {
+      setError("File has no data rows.");
       setBusy(false);
       return;
     }
+    const header = rows[0];
+    const dataRows = rows.slice(1);
+    const chunks = buildChunks(header, dataRows);
 
-    setResult(body);
+    const agg: Result = {
+      totalRows: 0,
+      inserted: 0,
+      skippedCount: 0,
+      failedCount: 0,
+      skipped: [],
+      failed: [],
+    };
+    let rowOffset = 0;
+
+    for (let i = 0; i < chunks.length; i++) {
+      if (chunks.length > 1) setProgress(`Uploading part ${i + 1} of ${chunks.length}…`);
+
+      const csvText = stringifyCsv([header, ...chunks[i]]);
+      const fd = new FormData();
+      fd.append("file", new Blob([csvText], { type: "text/csv" }), "chunk.csv");
+
+      const res = await fetch("/api/admin/upload", { method: "POST", body: fd });
+      const body = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        const part = chunks.length > 1 ? ` (part ${i + 1} of ${chunks.length})` : "";
+        setError((body?.error ?? "Upload failed.") + part);
+        setBusy(false);
+        setProgress(null);
+        return;
+      }
+
+      agg.totalRows += body.totalRows;
+      agg.inserted += body.inserted;
+      agg.skippedCount += body.skippedCount;
+      agg.failedCount += body.failedCount;
+      for (const r of body.skipped as RowIssue[]) {
+        if (agg.skipped.length < MAX_DISPLAYED) agg.skipped.push({ ...r, row: r.row + rowOffset });
+      }
+      for (const r of body.failed as RowIssue[]) {
+        if (agg.failed.length < MAX_DISPLAYED) agg.failed.push({ ...r, row: r.row + rowOffset });
+      }
+
+      rowOffset += chunks[i].length;
+    }
+
+    setResult(agg);
     setFile(null);
     setBusy(false);
+    setProgress(null);
   }
 
   return (
@@ -111,7 +186,7 @@ export default function UploadDataForm() {
       />
 
       <button className="btn" type="submit" disabled={busy || !file}>
-        {busy ? "Uploading…" : "Upload"}
+        {busy ? progress ?? "Uploading…" : "Upload"}
       </button>
 
       {error && (
@@ -129,12 +204,12 @@ export default function UploadDataForm() {
             {result.failedCount > 0 && ` Failed ${result.failedCount.toLocaleString("en-IN")}.`}
           </p>
 
-          <IssueList title="Skipped — missing required values, never attempted" rows={result.skipped} />
-          <IssueList title="Failed — rejected by the database" rows={result.failed} />
-
-          {result.truncated && (
-            <p className="hint">Showing the first 200 of each — fix these and re-upload the rest.</p>
-          )}
+          <IssueList
+            title="Skipped — missing required values, never attempted"
+            count={result.skippedCount}
+            rows={result.skipped}
+          />
+          <IssueList title="Failed — rejected by the database" count={result.failedCount} rows={result.failed} />
         </div>
       )}
     </form>
