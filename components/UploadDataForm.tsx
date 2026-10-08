@@ -91,10 +91,12 @@ function IssueList({ title, count, rows }: { title: string; count: number; rows:
   );
 }
 
+type Progress = { percent: number; rowsDone: number; rowsTotal: number; part: number; parts: number };
+
 export default function UploadDataForm() {
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
-  const [progress, setProgress] = useState<string | null>(null);
+  const [progress, setProgress] = useState<Progress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Result | null>(null);
 
@@ -115,6 +117,7 @@ export default function UploadDataForm() {
     const header = rows[0];
     const dataRows = rows.slice(1);
     const chunks = buildChunks(header, dataRows);
+    const rowsTotal = dataRows.length;
 
     const agg: Result = {
       totalRows: 0,
@@ -125,10 +128,9 @@ export default function UploadDataForm() {
       failed: [],
     };
     let rowOffset = 0;
+    setProgress({ percent: 0, rowsDone: 0, rowsTotal, part: 1, parts: chunks.length });
 
     for (let i = 0; i < chunks.length; i++) {
-      if (chunks.length > 1) setProgress(`Uploading part ${i + 1} of ${chunks.length}…`);
-
       const csvText = stringifyCsv([header, ...chunks[i]]);
       const fd = new FormData();
       fd.append("file", new Blob([csvText], { type: "text/csv" }), "chunk.csv");
@@ -156,6 +158,13 @@ export default function UploadDataForm() {
       }
 
       rowOffset += chunks[i].length;
+      setProgress({
+        percent: Math.round((rowOffset / rowsTotal) * 100),
+        rowsDone: rowOffset,
+        rowsTotal,
+        part: i + 1,
+        parts: chunks.length,
+      });
     }
 
     setResult(agg);
@@ -186,8 +195,21 @@ export default function UploadDataForm() {
       />
 
       <button className="btn" type="submit" disabled={busy || !file}>
-        {busy ? progress ?? "Uploading…" : "Upload"}
+        {busy ? "Uploading…" : "Upload"}
       </button>
+
+      {progress && (
+        <div className="upload-progress">
+          <div className="upload-progress-bar">
+            <div className="upload-progress-fill" style={{ width: `${progress.percent}%` }} />
+          </div>
+          <p className="hint">
+            {progress.percent}% — {progress.rowsDone.toLocaleString("en-IN")} of{" "}
+            {progress.rowsTotal.toLocaleString("en-IN")} rows
+            {progress.parts > 1 && ` (part ${progress.part} of ${progress.parts})`}
+          </p>
+        </div>
+      )}
 
       {error && (
         <div className="error" role="alert">
