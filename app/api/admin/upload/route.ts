@@ -20,7 +20,7 @@ const REQUIRED_COLUMNS = [
   "address",
 ] as const;
 
-const BATCH_SIZE = 500;
+const BATCH_SIZE = 200; // small enough that progress updates feel live
 const MAX_DETAILS = 200; // cap how many skipped/failed rows we report individually
 
 type Row = { row: number; registration_no: string; reason: string };
@@ -79,6 +79,7 @@ export async function POST(request: Request) {
   // --- Validate every row up front; rows missing a required value never get an insert attempt. ---
   const skipped: Row[] = [];
   const toInsert: { rowNum: number; record: Record<string, unknown> }[] = [];
+  const seenInFile = new Map<string, number>(); // registration_no -> first row it appeared at
 
   dataRows.forEach((r, i) => {
     const rowNum = i + 2; // +1 for 0-index, +1 for the header row
@@ -120,6 +121,17 @@ export async function POST(request: Request) {
       return;
     }
 
+    const firstRow = seenInFile.get(registration_no);
+    if (firstRow !== undefined) {
+      skipped.push({
+        row: rowNum,
+        registration_no,
+        reason: `Duplicate registration_no within this file (first seen at row ${firstRow})`,
+      });
+      return;
+    }
+    seenInFile.set(registration_no, rowNum);
+
     toInsert.push({
       rowNum,
       record: {
@@ -138,51 +150,100 @@ export async function POST(request: Request) {
     });
   });
 
-  // --- Insert in batches; on a batch failure, retry row-by-row to pin down which rows failed and why. ---
-  const admin = createAdminClient();
-  let inserted = 0;
-  const failed: Row[] = [];
-
   function reasonFor(error: { code?: string; message: string }): string {
-    if (error.code === "23505") return "Duplicate registration_no (already in the database or repeated in this file)";
+    if (error.code === "23505") return "Duplicate registration_no (already in the database)";
     if (error.code === "22007" || error.code === "22008") return "Invalid date in registration_date";
     if (error.code === "22P02") return "Invalid value for a numeric field (reg_year)";
     return error.message;
   }
 
-  for (let i = 0; i < toInsert.length; i += BATCH_SIZE) {
-    const batch = toInsert.slice(i, i + BATCH_SIZE);
-    const { error, count } = await admin
-      .from("vehicles")
-      .insert(batch.map((b) => b.record), { count: "exact" });
+  // --- Stream one NDJSON line per small batch, so the client can show live progress
+  // instead of waiting for the whole file to finish. Batches use upsert(ignoreDuplicates),
+  // which absorbs registration_no conflicts with existing DB rows in the same round-trip
+  // instead of a per-row retry loop — a file with many duplicates previously meant
+  // thousands of sequential single-row inserts, slow enough to hang past the function's
+  // execution limit. ---
+  const admin = createAdminClient();
+  const encoder = new TextEncoder();
+  const totalRows = dataRows.length;
 
-    if (!error) {
-      inserted += count ?? batch.length;
-      continue;
-    }
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (obj: unknown) => controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
 
-    // Something in this batch failed — fall back to one-by-one so we can report the exact row(s).
-    for (const b of batch) {
-      const { error: rowError } = await admin.from("vehicles").insert(b.record);
-      if (rowError) {
-        failed.push({
-          row: b.rowNum,
-          registration_no: String(b.record.registration_no),
-          reason: reasonFor(rowError),
+      send({
+        event: "start",
+        totalRows,
+        skippedCount: skipped.length,
+        skipped: skipped.slice(0, MAX_DETAILS),
+      });
+
+      let inserted = 0;
+      let failedCount = 0;
+      let doneInsertRows = 0;
+
+      for (let i = 0; i < toInsert.length; i += BATCH_SIZE) {
+        const batch = toInsert.slice(i, i + BATCH_SIZE);
+        const batchFailed: Row[] = [];
+        let batchInserted = 0;
+
+        const { data, error } = await admin
+          .from("vehicles")
+          .upsert(
+            batch.map((b) => b.record),
+            { onConflict: "registration_no", ignoreDuplicates: true }
+          )
+          .select("registration_no");
+
+        if (!error) {
+          const insertedNos = new Set((data ?? []).map((r) => r.registration_no as string));
+          batchInserted = insertedNos.size;
+          for (const b of batch) {
+            if (!insertedNos.has(String(b.record.registration_no))) {
+              batchFailed.push({
+                row: b.rowNum,
+                registration_no: String(b.record.registration_no),
+                reason: "Duplicate registration_no (already in the database)",
+              });
+            }
+          }
+        } else {
+          // The batch itself errored for a reason other than a duplicate key — fall back
+          // to one-by-one for just this batch (at most BATCH_SIZE rows) to pin the cause.
+          for (const b of batch) {
+            const { error: rowError } = await admin.from("vehicles").insert(b.record);
+            if (rowError) {
+              batchFailed.push({
+                row: b.rowNum,
+                registration_no: String(b.record.registration_no),
+                reason: reasonFor(rowError),
+              });
+            } else {
+              batchInserted += 1;
+            }
+          }
+        }
+
+        inserted += batchInserted;
+        failedCount += batchFailed.length;
+        doneInsertRows += batch.length;
+
+        send({
+          event: "progress",
+          inserted,
+          failedCount,
+          failed: batchFailed, // this batch's failures only; client appends up to its own cap
+          doneRows: skipped.length + doneInsertRows,
+          totalRows,
         });
-      } else {
-        inserted += 1;
       }
-    }
-  }
 
-  return NextResponse.json({
-    totalRows: dataRows.length,
-    inserted,
-    skippedCount: skipped.length,
-    failedCount: failed.length,
-    skipped: skipped.slice(0, MAX_DETAILS),
-    failed: failed.slice(0, MAX_DETAILS),
-    truncated: skipped.length > MAX_DETAILS || failed.length > MAX_DETAILS,
+      send({ event: "done" });
+      controller.close();
+    },
+  });
+
+  return new Response(stream, {
+    headers: { "Content-Type": "application/x-ndjson", "Cache-Control": "no-store" },
   });
 }
