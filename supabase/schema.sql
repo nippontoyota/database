@@ -108,6 +108,30 @@ as $$
   limit p_limit;
 $$;
 
+-- 5. Monthly counts for the admin dashboard chart. Groups by calendar month
+-- (1-12) across whichever years are selected, not by a specific year-month pair.
+create or replace function public.monthly_counts(
+  p_years  int[]  default null,
+  p_makers text[] default null,
+  p_models text[] default null,
+  p_rtos   text[] default null
+)
+returns table(month smallint, count bigint)
+language sql
+stable
+security invoker
+as $$
+  select extract(month from v.registration_date)::smallint as month, count(*) as count
+  from public.vehicles v
+  where (p_years  is null or v.reg_year = any(p_years))
+    and (p_makers is null or v.maker    = any(p_makers))
+    and (p_models is null or v.model    = any(p_models))
+    and (p_rtos   is null or v.rto_code = any(p_rtos))
+  group by month
+  order by month;
+$$;
+
 grant execute on function public.get_filter_options() to authenticated;
 grant execute on function public.count_vehicles(int[], text[], text[], text[]) to authenticated;
 grant execute on function public.search_vehicles(int[], text[], text[], text[], bigint, int) to authenticated;
+grant execute on function public.monthly_counts(int[], text[], text[], text[]) to authenticated;

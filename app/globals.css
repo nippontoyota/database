@@ -289,6 +289,17 @@ button, input { font: inherit; color: inherit; }
 }
 .upload-progress .hint { margin: 6px 0 0; }
 
+/* ---------- Dashboard chart ---------- */
+.chart-panel { padding: 20px; margin-top: 20px; transition: opacity 0.15s; }
+.chart-panel.is-stale { opacity: 0.6; }
+.chart-wrap { width: 100%; }
+.chart-svg { width: 100%; height: auto; }
+.chart-gridline { stroke: var(--border); stroke-width: 1; }
+.chart-axis-label { fill: var(--text-dim); font-size: 11px; }
+.chart-value-label { fill: var(--text); font-size: 12px; font-weight: 600; }
+.chart-bar { fill: var(--accent); transition: fill 0.1s; }
+.chart-bar.is-hover { fill: var(--accent-hover); }
+
 /* ---------- Login ---------- */
 .login-wrap { min-height: 100vh; display: grid; place-items: center; padding: 20px; }
 .login-card { width: 100%; max-width: 380px; padding: 28px; }

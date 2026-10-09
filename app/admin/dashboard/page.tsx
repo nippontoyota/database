@@ -1,12 +1,11 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isAdminEmail } from "@/lib/supabase/admin";
-import CreateUserForm from "@/components/CreateUserForm";
-import UploadDataForm from "@/components/UploadDataForm";
+import DashboardClient from "@/components/DashboardClient";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminPage() {
+export default async function AdminDashboardPage() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -22,8 +21,8 @@ export default async function AdminPage() {
           <span className="brand">Registration Data Portal — Admin</span>
           <div className="who">
             <span>{user.email}</span>
-            <a className="link-btn" href="/admin/dashboard">
-              Dashboard
+            <a className="link-btn" href="/admin">
+              Admin home
             </a>
             <a className="link-btn" href="/">
               Back to portal
@@ -38,13 +37,7 @@ export default async function AdminPage() {
       </header>
 
       <main className="page">
-        <h1>Admin</h1>
-        <p className="lead">Manage who can sign in to the Portal.</p>
-
-        <div className="admin-grid">
-          <CreateUserForm />
-          <UploadDataForm />
-        </div>
+        <DashboardClient />
       </main>
     </>
   );
