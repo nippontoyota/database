@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 // Paths reachable without a session at all.
-const PUBLIC_PATHS = ["/login", "/auth/confirm"];
+const PUBLIC_PATHS = ["/login", "/auth/confirm", "/accept-invite"];
 // Paths a signed-in user can reach even before finishing MFA setup/challenge.
 const MFA_EXEMPT_PATHS = ["/mfa/enroll", "/mfa/verify", "/set-password", "/auth/signout"];
 
