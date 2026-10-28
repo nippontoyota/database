@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isAdminEmail } from "@/lib/supabase/admin";
 import CreateUserForm from "@/components/CreateUserForm";
 import UploadDataForm from "@/components/UploadDataForm";
+import UploadProfilesForm from "@/components/UploadProfilesForm";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,7 @@ export default async function AdminPage() {
         <div className="admin-grid">
           <CreateUserForm />
           <UploadDataForm />
+          <UploadProfilesForm />
         </div>
       </main>
     </>

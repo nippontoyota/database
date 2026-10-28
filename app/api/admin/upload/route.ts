@@ -23,7 +23,7 @@ const REQUIRED_COLUMNS = [
 const BATCH_SIZE = 200; // small enough that progress updates feel live
 const MAX_DETAILS = 200; // cap how many skipped/failed rows we report individually
 
-type Row = { row: number; registration_no: string; reason: string };
+type Row = { row: number; label: string; reason: string };
 
 /** Accepts YYYY-MM-DD (passes through) or DD-MM-YYYY / DD/MM/YYYY (converted). Returns null if unparseable. */
 function normalizeDate(raw: string): string | null {
@@ -105,7 +105,7 @@ export async function POST(request: Request) {
     if (missingFields.length) {
       skipped.push({
         row: rowNum,
-        registration_no: registration_no || "(blank)",
+        label: registration_no || "(blank)",
         reason: `Missing ${missingFields.join(", ")}`,
       });
       return;
@@ -115,7 +115,7 @@ export async function POST(request: Request) {
     if (!registration_date) {
       skipped.push({
         row: rowNum,
-        registration_no,
+        label: registration_no,
         reason: `Unparseable registration_date "${registration_date_raw}" (expected YYYY-MM-DD or DD-MM-YYYY)`,
       });
       return;
@@ -125,7 +125,7 @@ export async function POST(request: Request) {
     if (firstRow !== undefined) {
       skipped.push({
         row: rowNum,
-        registration_no,
+        label: registration_no,
         reason: `Duplicate registration_no within this file (first seen at row ${firstRow})`,
       });
       return;
@@ -202,7 +202,7 @@ export async function POST(request: Request) {
             if (!insertedNos.has(String(b.record.registration_no))) {
               batchFailed.push({
                 row: b.rowNum,
-                registration_no: String(b.record.registration_no),
+                label: String(b.record.registration_no),
                 reason: "Duplicate registration_no (already in the database)",
               });
             }
@@ -215,7 +215,7 @@ export async function POST(request: Request) {
             if (rowError) {
               batchFailed.push({
                 row: b.rowNum,
-                registration_no: String(b.record.registration_no),
+                label: String(b.record.registration_no),
                 reason: reasonFor(rowError),
               });
             } else {

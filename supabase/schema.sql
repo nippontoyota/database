@@ -135,3 +135,32 @@ grant execute on function public.get_filter_options() to authenticated;
 grant execute on function public.count_vehicles(int[], text[], text[], text[]) to authenticated;
 grant execute on function public.search_vehicles(int[], text[], text[], text[], bigint, int) to authenticated;
 grant execute on function public.monthly_counts(int[], text[], text[], text[]) to authenticated;
+
+-- 6. Profile database: RTO/firm business contacts. Separate from vehicles;
+-- admin-only upload, same no-client-write security model. -----------------
+create table if not exists public.rto_profiles (
+  id              bigint generated always as identity primary key,
+  rto_no          text,
+  district        text,
+  firm_name       text,
+  contact_person  text,
+  mobile          text,
+  email           text,
+  address         text,
+  city            text,
+  pincode         text,
+  profile         text,
+  state_orig      text,
+  phone2          text
+);
+
+create index if not exists rto_profiles_rto_no_idx on public.rto_profiles (rto_no);
+create index if not exists rto_profiles_district_idx on public.rto_profiles (district);
+
+alter table public.rto_profiles enable row level security;
+
+drop policy if exists "signed-in users can read rto_profiles" on public.rto_profiles;
+create policy "signed-in users can read rto_profiles"
+  on public.rto_profiles for select
+  to authenticated
+  using (true);
