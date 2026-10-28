@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import MultiSelect, { type Option } from "./MultiSelect";
+import ProfileSearch from "./ProfileSearch";
 
 type OptionsPayload = {
   years: number[];
@@ -11,6 +12,7 @@ type OptionsPayload = {
 };
 
 export default function Portal({ email, isAdmin }: { email: string; isAdmin: boolean }) {
+  const [tab, setTab] = useState<"vehicles" | "profiles">("vehicles");
   const [options, setOptions] = useState<OptionsPayload | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -146,90 +148,123 @@ export default function Portal({ email, isAdmin }: { email: string; isAdmin: boo
       </header>
 
       <main className="page">
-        <h1>Download registration data</h1>
-        <p className="lead">
-          Pick one or more values in any filter. A filter left empty includes everything.
-        </p>
+        <div className="tabs" role="tablist" aria-label="Dataset">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "vehicles"}
+            className={`tab-btn${tab === "vehicles" ? " is-active" : ""}`}
+            onClick={() => setTab("vehicles")}
+          >
+            Vehicles
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "profiles"}
+            className={`tab-btn${tab === "profiles" ? " is-active" : ""}`}
+            onClick={() => setTab("profiles")}
+          >
+            Profile database
+          </button>
+        </div>
 
-        {loadError && (
-          <div className="error" role="alert">
-            Could not load the filter options: {loadError}. Check that schema.sql has been run and
-            data has been imported.
-          </div>
-        )}
+        {tab === "vehicles" ? (
+          <>
+            <h1>Download registration data</h1>
+            <p className="lead">
+              Pick one or more values in any filter. A filter left empty includes everything.
+            </p>
 
-        <section className="panel" aria-label="Filters">
-          <div className="filters">
-            <MultiSelect
-              label="Year"
-              allLabel="All years"
-              options={yearOptions}
-              selected={years}
-              onChange={setYears}
-              searchable={false}
-              disabled={!options}
-            />
-            <MultiSelect
-              label="Maker"
-              allLabel="All makers"
-              options={makerOptions}
-              selected={makers}
-              onChange={setMakers}
-              disabled={!options}
-            />
-            <MultiSelect
-              label="Model"
-              allLabel={makers.length ? "All models of selected makers" : "All models"}
-              options={modelOptions}
-              selected={models}
-              onChange={setModels}
-              disabled={!options}
-            />
-            <MultiSelect
-              label="RTO"
-              allLabel="All RTOs"
-              options={rtoOptions}
-              selected={rtos}
-              onChange={setRtos}
-              disabled={!options}
-            />
-          </div>
-
-          <div className="summary">
-            <div>
-              <div className={`count${counting ? " is-stale" : ""}`} aria-live="polite">
-                {count === null ? "…" : count.toLocaleString("en-IN")}
+            {loadError && (
+              <div className="error" role="alert">
+                Could not load the filter options: {loadError}. Check that schema.sql has been run
+                and data has been imported.
               </div>
-              <div className="count-label">records match</div>
-            </div>
+            )}
 
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              {anyFilter && (
-                <button type="button" className="link-btn" onClick={clearAll}>
-                  Clear filters
-                </button>
-              )}
-              {/* A native form post lets the browser stream the file straight to disk. */}
-              <form ref={formRef} action="/api/export" method="post">
-                <input type="hidden" name="filters" value={JSON.stringify(filtersPayload)} />
-                <button className="btn" type="submit" disabled={!canDownload}>
-                  Download CSV
-                </button>
-              </form>
-            </div>
-          </div>
-        </section>
+            <section className="panel" aria-label="Filters">
+              <div className="filters">
+                <MultiSelect
+                  label="Year"
+                  allLabel="All years"
+                  options={yearOptions}
+                  selected={years}
+                  onChange={setYears}
+                  searchable={false}
+                  disabled={!options}
+                />
+                <MultiSelect
+                  label="Maker"
+                  allLabel="All makers"
+                  options={makerOptions}
+                  selected={makers}
+                  onChange={setMakers}
+                  disabled={!options}
+                />
+                <MultiSelect
+                  label="Model"
+                  allLabel={makers.length ? "All models of selected makers" : "All models"}
+                  options={modelOptions}
+                  selected={models}
+                  onChange={setModels}
+                  disabled={!options}
+                />
+                <MultiSelect
+                  label="RTO"
+                  allLabel="All RTOs"
+                  options={rtoOptions}
+                  selected={rtos}
+                  onChange={setRtos}
+                  disabled={!options}
+                />
+              </div>
 
-        {countError && (
-          <div className="error" role="alert">
-            {countError}
-          </div>
+              <div className="summary">
+                <div>
+                  <div className={`count${counting ? " is-stale" : ""}`} aria-live="polite">
+                    {count === null ? "…" : count.toLocaleString("en-IN")}
+                  </div>
+                  <div className="count-label">records match</div>
+                </div>
+
+                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  {anyFilter && (
+                    <button type="button" className="link-btn" onClick={clearAll}>
+                      Clear filters
+                    </button>
+                  )}
+                  {/* A native form post lets the browser stream the file straight to disk. */}
+                  <form ref={formRef} action="/api/export" method="post">
+                    <input type="hidden" name="filters" value={JSON.stringify(filtersPayload)} />
+                    <button className="btn" type="submit" disabled={!canDownload}>
+                      Download CSV
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </section>
+
+            {countError && (
+              <div className="error" role="alert">
+                {countError}
+              </div>
+            )}
+
+            <p className="hint">
+              Large downloads (the full dataset is about 300,000 rows) can take up to a minute to
+              start saving. Keep the tab open until the browser finishes.
+            </p>
+          </>
+        ) : (
+          <>
+            <h1>Profile database</h1>
+            <p className="lead">
+              Pick one or more values in any filter. A filter left empty includes everything.
+            </p>
+            <ProfileSearch />
+          </>
         )}
-
-        <p className="hint">
-          Large downloads (the full dataset is about 300,000 rows) can take up to a minute to start
-          saving. Keep the tab open until the browser finishes.
-        </p>
       </main>
     </>
   );

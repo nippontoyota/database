@@ -164,3 +164,62 @@ create policy "signed-in users can read rto_profiles"
   on public.rto_profiles for select
   to authenticated
   using (true);
+
+-- 7. Filter options + search/count for the profile database, filtered by
+-- "profile" (category) and rto_no. Same NULL-means-everything convention.
+create or replace function public.get_profile_filter_options()
+returns json
+language sql
+stable
+security invoker
+as $$
+  select json_build_object(
+    'profiles', (
+      select coalesce(json_agg(p order by p), '[]'::json)
+      from (select distinct profile as p from public.rto_profiles where profile is not null and profile <> '') t
+    ),
+    'rtos', (
+      select coalesce(json_agg(r order by r), '[]'::json)
+      from (select distinct rto_no as r from public.rto_profiles where rto_no is not null and rto_no <> '') t
+    )
+  );
+$$;
+
+create or replace function public.count_profiles(
+  p_profiles text[] default null,
+  p_rtos     text[] default null
+)
+returns bigint
+language sql
+stable
+security invoker
+as $$
+  select count(*)
+  from public.rto_profiles p
+  where (p_profiles is null or p.profile = any(p_profiles))
+    and (p_rtos     is null or p.rto_no  = any(p_rtos));
+$$;
+
+create or replace function public.search_profiles(
+  p_profiles text[] default null,
+  p_rtos     text[] default null,
+  p_after    bigint default 0,
+  p_limit    int    default 1000
+)
+returns setof public.rto_profiles
+language sql
+stable
+security invoker
+as $$
+  select p.*
+  from public.rto_profiles p
+  where p.id > p_after
+    and (p_profiles is null or p.profile = any(p_profiles))
+    and (p_rtos     is null or p.rto_no  = any(p_rtos))
+  order by p.id
+  limit p_limit;
+$$;
+
+grant execute on function public.get_profile_filter_options() to authenticated;
+grant execute on function public.count_profiles(text[], text[]) to authenticated;
+grant execute on function public.search_profiles(text[], text[], bigint, int) to authenticated;
