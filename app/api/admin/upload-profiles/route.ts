@@ -75,22 +75,8 @@ export async function POST(request: Request) {
       return; // fully blank line — ignored, not counted as skipped
     }
 
-    const rtoNo = get("rto_no");
-    const firmName = get("firm_name");
-
-    const missingFields: string[] = [];
-    if (!rtoNo) missingFields.push("rto_no");
-    if (!firmName) missingFields.push("firm_name");
-
-    if (missingFields.length) {
-      skipped.push({
-        row: rowNum,
-        label: firmName || rtoNo || "(blank)",
-        reason: `Missing ${missingFields.join(", ")}`,
-      });
-      return;
-    }
-
+    // No per-cell requirement — any row with at least one non-blank cell is
+    // inserted, with blank cells stored as null (including rto_no/firm_name).
     const record: Record<string, unknown> = {};
     for (const c of COLUMNS) {
       record[c] = get(c) || null;
